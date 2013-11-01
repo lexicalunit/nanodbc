@@ -62,7 +62,7 @@
     #else
         #define NANODBC_TEXT(s) s
         #define NANODBC_SSCANF std::sscanf
-        #define NANODBC_SNPRINTF std::snprintf
+        #define NANODBC_SNPRINTF _snprintf
         #define NANODBC_STRFTIME std::strftime
         #define NANODBC_STRLEN std::strlen
         #define NANODBC_UNICODE(f) f
