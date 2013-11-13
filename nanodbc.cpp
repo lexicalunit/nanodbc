@@ -765,6 +765,7 @@ public:
     : stmt_(0)
     , open_(false)
     , conn_()
+    , sqlnull_(SQL_NULL_DATA)
     {
 
     }
@@ -773,6 +774,7 @@ public:
     : stmt_(0)
     , open_(false)
     , conn_()
+    , sqlnull_(SQL_NULL_DATA)
     {
         open(conn);
     }
@@ -781,6 +783,7 @@ public:
     : stmt_(0)
     , open_(false)
     , conn_()
+    , sqlnull_(SQL_NULL_DATA)
     {
         prepare(conn, query, timeout);
     }
@@ -1053,7 +1056,45 @@ public:
         if(!success(rc))
             NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
     }
+	
+    void bind_null_parameter(short param)
+	{
+		RETCODE rc;
+        SQLSMALLINT data_type;
+        SQLULEN parameter_size;
+        NANODBC_CALL_RC(
+            SQLDescribeParam
+            , rc
+            , stmt_
+            , param + 1
+            , &data_type
+            , &parameter_size
+            , 0
+            , 0);
+        if(!success(rc))
+            NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
 
+		SQLSMALLINT param_type;
+        
+        param_type = SQL_PARAM_INPUT;
+        
+		NANODBC_CALL_RC(
+            SQLBindParameter
+            , rc
+            , stmt_
+            , param + 1
+            , SQL_PARAM_INPUT
+            , SQL_C_DEFAULT
+            , data_type
+            , parameter_size // column size ignored for many types, but needed for strings
+            , 0
+            , (SQLPOINTER) NULL
+            , parameter_size
+            , &sqlnull_);
+        if(!success(rc))
+            NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);	
+	}
+	
 private:
     statement_impl(const statement_impl&); // not defined
     statement_impl& operator=(const statement_impl&); // not defined
@@ -1062,6 +1103,7 @@ private:
     HSTMT stmt_;
     bool open_;
     class connection conn_;
+    nanodbc::null_type sqlnull_;
 };
 
 } // namespace nanodbc
@@ -2038,6 +2080,11 @@ template<class T>
 void statement::bind_parameter(short param, const T* value, null_type* nulls, param_direction direction)
 {
     impl_->bind_parameter(param, reinterpret_cast<const T*>(value), nulls, direction);
+}
+
+void statement::bind_null_parameter(short param)
+{	
+	impl_->bind_null_parameter(param);
 }
 
 // The following are the only supported instantiations of statement::bind_parameter().
