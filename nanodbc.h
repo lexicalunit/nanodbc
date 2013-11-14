@@ -451,6 +451,7 @@ public:
     template<class T>
     void bind_parameter(short param, const T* value, null_type* nulls = 0, param_direction direction = PARAM_IN);
 
+    
     //! \brief Binds the given values to the given parameter placeholder number in the prepared statement.
     //!
     //! If your prepared SQL query has any ? placeholders, this is how you bind values to them.
@@ -487,6 +488,15 @@ public:
         bind_parameter(param, reinterpret_cast<const string_type::value_type*>(values), nulls, direction);
     }
 
+	//! \brief Binds null value to the given parameter placeholder number in the prepared statement.
+    //!
+    //! If your prepared SQL query has any ? placeholders, this is how you bind values to them.
+    //! Placeholder numbers count from left to right and are 0-indexed.
+    //! 
+    //! 
+    //! \param param Placeholder position.
+	void bind_null_parameter(short param);
+	
 private:
     class statement_impl;
     friend class nanodbc::result;
