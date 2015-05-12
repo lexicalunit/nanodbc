@@ -16,6 +16,7 @@
 #include <cstring>
 #include <ctime>
 #include <map>
+#include <sstream>
 
 #if defined(NANODBC_USE_CPP11)
     #include <codecvt>
@@ -39,6 +40,7 @@
 
 #ifdef _WIN32
     // needs to be included above sql.h for windows
+    #define NOMINMAX
     #include <windows.h>
 #endif
 
@@ -192,6 +194,42 @@ namespace
             return s;
         }
     #endif
+
+        inline void convert(const std::string& in, std::wstring & out);
+        inline void convert(const std::wstring& in, std::string & out);
+
+    #if defined(NANODBC_USE_CPP11)
+        // Convert std::string to std::wstring
+        inline void convert(const std::string& in, std::wstring & out)
+        {
+            std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+            out = conv.from_bytes(in);
+        }
+
+        // Convert std::wstring to std::string
+        inline void convert(const std::wstring& in, std::string & out)
+        {
+            std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+            out = conv.to_bytes(in);
+        }
+    #else
+        #error Not implemented (use utf8 library)
+    #endif
+
+        // Courtesy method to avoid #if defined(NANODBC_USE_UNICODE) 
+        // all over the place
+        inline void convert(const std::string& in, std::string & out)
+        {
+            out = in;
+        }
+
+        // Courtesy method to avoid #if defined(NANODBC_USE_UNICODE)
+        // all over the place
+        inline void convert(const std::wstring& in, std::wstring & out)
+        {
+            out = in;
+        }
+
 
     // Attempts to get the most recent ODBC error as a string.
     inline std::string recent_error(SQLHANDLE handle, SQLSMALLINT handle_type)
@@ -1243,7 +1281,8 @@ public:
                 return SQL_PARAM_OUTPUT;
                 break;
         }
-        assert(false);
+        // Remove warning C4702 : unreachable code nanodbc.cpp 1284	Nanodbc
+        //assert(false);
     }
 
     // initializes bind_len_or_null_ and gets information for bind
@@ -1286,7 +1325,7 @@ public:
     void bind_parameter(
         short param
         , const T* data
-        , std::size_t elements
+        , std::size_t /*elements*/
         , SQLSMALLINT data_type
         , SQLSMALLINT param_type
         , SQLULEN parameter_size)
@@ -1318,7 +1357,7 @@ public:
     void bind_strings(
         short param
         , const string_type::value_type* values
-        , std::size_t length
+        , std::size_t /*length*/
         , std::size_t elements
         , param_direction direction)
     {
@@ -1899,6 +1938,24 @@ private:
             if(!success(rc))
                 NANODBC_THROW_DATABASE_ERROR(stmt_.native_statement_handle(), SQL_HANDLE_STMT);
 
+            // Adjust the sqlsize parameter in case of "unlimited" data (varchar(max), nvarchar(max)).
+            bool isBlob = false;
+
+            if (sqlsize == 0)
+            {
+                switch (sqltype)
+                {
+                    case SQL_VARCHAR:
+                    case SQL_WVARCHAR:
+                    {
+                        //// Divide in half, due to sqlsize being 32-bit in Win32 (and 64-bit in x64)
+                        //sqlsize = std::numeric_limits<int32_t>::max() / 2 - 1;
+                        isBlob = true;
+                    }
+
+                }
+            }
+
             bound_column& col = bound_columns_[i];
             col.name_ = reinterpret_cast<string_type::value_type*>(column_name);
             col.column_ = i;
@@ -1943,11 +2000,21 @@ private:
                 case SQL_VARCHAR:
                     col.ctype_ = SQL_C_CHAR;
                     col.clen_ = (col.sqlsize_ + 1) * sizeof(SQLCHAR);
+                    if (isBlob)
+                    {
+                        col.clen_ = 0;
+                        col.blob_ = true;
+                    }
                     break;
                 case SQL_WCHAR:
                 case SQL_WVARCHAR:
                     col.ctype_ = SQL_C_WCHAR;
                     col.clen_ = (col.sqlsize_ + 1) * sizeof(SQLWCHAR);
+                    if (isBlob)
+                    {
+                        col.clen_ = 0;
+                        col.blob_ = true;
+                    }
                     break;
                 case SQL_LONGVARCHAR:
                     col.ctype_ = SQL_C_CHAR;
@@ -2070,9 +2137,11 @@ inline void result::result_impl::get_ref_impl<string_type>(short column, string_
         {
             if(col.blob_)
             {
-                result.clear();
-                char buff[1024];
+                // Input is always std::string, while output may be std::string or std::wstring
+                stringstream ss;
+                char buff[1024] = {0};
                 std::size_t buff_size = sizeof(buff);
+
                 SQLLEN ValueLenOrInd;
                 SQLRETURN rc;
                 void* handle = native_statement_handle();
@@ -2087,9 +2156,16 @@ inline void result::result_impl::get_ref_impl<string_type>(short column, string_
                         , buff              // TargetValuePtr
                         , buff_size         // BufferLength
                         , &ValueLenOrInd);  // StrLen_or_IndPtr
+
                     if(ValueLenOrInd > 0)
-                        result.append(buff);
+                    {
+                        ss << buff;
+                        //result.append(buff);
+                    }
                 } while(rc > 0);
+
+                // Run the string through the converter (if necessary)
+                convert(ss.str(), result);
             }
             else
             {
@@ -2102,13 +2178,52 @@ inline void result::result_impl::get_ref_impl<string_type>(short column, string_
 
         case SQL_C_WCHAR:
         {
-            if(col.blob_)
-                throw std::runtime_error("CLOB/BLOB not implemented yet for wide char types");
-            const SQLWCHAR* s =
-                reinterpret_cast<SQLWCHAR*>(col.pdata_ + rowset_position_ * col.clen_);
-            const string_type::size_type str_size = *col.cbdata_ / sizeof(SQLWCHAR);
-            // TODO: convert() if string_type::value_type is not SQLWCHAR
-            result.assign(s, s + str_size);
+            if (col.blob_)                
+            {
+                // Input is always std::wstring, output might be std::string or std::wstring.
+                // Use a string builder to build the output string.
+                wstringstream ss;
+                wchar_t buffer[512] = { 0 };
+
+                std::size_t buffer_size = sizeof(buffer);
+                SQLLEN ValueLenOrInd;
+                SQLRETURN rc;
+                void* handle = native_statement_handle();
+                do
+                {
+                    NANODBC_CALL_RC(
+                        SQLGetData
+                        , rc
+                        , handle            // StatementHandle
+                        , column + 1        // Col_or_Param_Num
+                        , SQL_C_WCHAR        // TargetType
+                        , buffer              // TargetValuePtr
+                        , buffer_size         // BufferLength
+                        , &ValueLenOrInd);  // StrLen_or_IndPtr
+                    if (ValueLenOrInd > 0)
+                    {
+                        //result.append(buff);
+                        ss << buffer;
+                    }
+                } while (rc > 0);
+
+
+                // Run the wstring through the converter (if necessary)
+                convert(ss.str(), result);
+            }
+            else
+            {
+                // Type is unicode in the database, convert if necessary
+                const SQLWCHAR* s =
+                    reinterpret_cast<SQLWCHAR*>(col.pdata_ + rowset_position_ * col.clen_);
+                const string_type::size_type str_size = *col.cbdata_ / sizeof(SQLWCHAR);
+
+                std::wstring tempResult(s, s + str_size);
+
+                convert(tempResult, result);
+
+            }
+
             return;
         }
 
