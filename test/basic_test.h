@@ -9,7 +9,11 @@
 #pragma warning(disable:4244) //conversion from 'T1' to 'T2' possible loss of data
 #endif
 #include <boost/test/unit_test.hpp>
+
+#ifdef NANODBC_USE_UNICODE
 #include <codecvt>
+#include <locale> // std::wstring_convert
+#endif
 
 #ifdef NANODBC_USE_UNICODE
     #define NANODBC_TEXT(s) L ## s
