@@ -213,6 +213,8 @@ namespace
 
     inline void convert(const wide_string_type& in, std::string& out)
     {
+        // Why static converters?
+        // See http://stackoverflow.com/questions/26196686/utf8-utf16-codecvt-poor-performance
         #ifdef NANODBC_USE_BOOST_CONVERT
             using boost::locale::conv::utf_to_utf;
             out = utf_to_utf<char>(in.c_str(), in.c_str() + in.size());
@@ -221,10 +223,13 @@ namespace
                 // Workaround for confirmed bug in VS2015. See:
                 // https://connect.microsoft.com/VisualStudio/Feedback/Details/1403302
                 // https://social.msdn.microsoft.com/Forums/en-US/8f40dcd8-c67f-4eba-9134-a19b9178e481/vs-2015-rc-linker-stdcodecvt-error
+                // Why static? http://stackoverflow.com/questions/26196686/utf8-utf16-codecvt-poor-performance
                 auto p = reinterpret_cast<unsigned short const*>(in.data());
-                out = std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short>().to_bytes(p, p + in.size());
+                static std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short> converter;
+                out = converter.to_bytes(p, p + in.size());
             #else
-                out = std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t>().to_bytes(in);
+                static std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t> converter;
+                out = converter.to_bytes(in);
             #endif
         #endif
     }
@@ -239,11 +244,13 @@ namespace
                 // Workaround for confirmed bug in VS2015. See:
                 // https://connect.microsoft.com/VisualStudio/Feedback/Details/1403302
                 // https://social.msdn.microsoft.com/Forums/en-US/8f40dcd8-c67f-4eba-9134-a19b9178e481/vs-2015-rc-linker-stdcodecvt-error
-                auto s = std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short>().from_bytes(in);
+                static std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short> converter;
+                auto s = converter.from_bytes(in);
                 auto p = reinterpret_cast<wide_char_t const*>(s.data());
                 out.assign(p, p + s.size());
             #else
-                out = std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t>().from_bytes(in);
+                static std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t> converter;
+                out = converter.from_bytes(in);
             #endif
         }
 
