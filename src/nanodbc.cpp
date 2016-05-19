@@ -225,10 +225,10 @@ namespace
                 // https://social.msdn.microsoft.com/Forums/en-US/8f40dcd8-c67f-4eba-9134-a19b9178e481/vs-2015-rc-linker-stdcodecvt-error
                 // Why static? http://stackoverflow.com/questions/26196686/utf8-utf16-codecvt-poor-performance
                 auto p = reinterpret_cast<unsigned short const*>(in.data());
-                static std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short> converter;
+                static thread_local std::wstring_convert<NANODBC_CODECVT_TYPE<unsigned short>, unsigned short> converter;
                 out = converter.to_bytes(p, p + in.size());
             #else
-                static std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t> converter;
+                static thread_local std::wstring_convert<NANODBC_CODECVT_TYPE<wide_char_t>, wide_char_t> converter;
                 out = converter.to_bytes(in);
             #endif
         #endif
