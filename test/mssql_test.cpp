@@ -237,6 +237,35 @@ TEST_CASE_METHOD(mssql_fixture, "move_test", "[mssql][move]")
     move_test();
 }
 
+TEST_CASE_METHOD(mssql_fixture, "null_access_test", "[mssql][null]")
+{
+    nanodbc::connection connection = connect();
+    drop_table(connection, NANODBC_TEXT("null_access_test"));
+    execute(connection, NANODBC_TEXT("create table null_access_test (a varchar(max));"));
+
+    {
+        nanodbc::statement statement(connection);
+        prepare(statement, NANODBC_TEXT("insert into null_access_test (a) values (?);"));
+        statement.bind_null(0);
+        execute(statement);
+    }
+
+    nanodbc::result results = execute(connection, NANODBC_TEXT("select a from null_access_test;"));
+
+    REQUIRE(results.next());
+    //FIXME:
+    // null indicator is not set for nullable variable-length columns
+    // because auto_bind() for col.blob_ does not specify separate length and indicator buffers
+    // Fix, comment if(col.blob_) branch in auto_bind() to make it call the 2nd SQLBindCol
+    REQUIRE(results.is_null(0));
+    // Since null indicator is not set, empty string is returned instead of the fallback value
+    auto const fallback = NANODBC_TEXT("value_is_null");
+    REQUIRE(results.get<nanodbc::string_type>(0, fallback) == fallback);
+    REQUIRE_THROWS_AS(results.get<nanodbc::string_type>(0).empty(), nanodbc::null_access_error);
+
+    REQUIRE(!results.next());
+}
+
 TEST_CASE_METHOD(mssql_fixture, "null_test", "[mssql][null]")
 {
     null_test();
