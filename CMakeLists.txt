@@ -1,11 +1,9 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.0.2)
 project(nanodbc)
 
-option(NANODBC_USE_UNICODE "build with unicode support turned on" OFF)
 option(NANODBC_USE_BOOST_CONVERT "build using Boost.Locale for string convert" OFF)
 option(NANODBC_HANDLE_NODATA_BUG "enable special handling for SQL_NO_DATA (required for vertica)" OFF)
 option(NANODBC_DISABLE_ASYNC "disable async features entirely (may help resolve issues in VS2015 builds)" OFF)
-option(NANODBC_STATIC "build static instead of shared library" OFF)
 option(NANODBC_EXAMPLES "build examples" ON)
 option(NANODBC_TEST "build tests" ON)
 option(NANODBC_INSTALL "generate install target" ON)
@@ -107,9 +105,6 @@ if(UNIX)
 			set(CMAKE_FLAGS "${CMAKE_FLAGS} ${ODBC_CFLAGS}")
 			execute_process(COMMAND ${ODBC_CONFIG} --libs
 				OUTPUT_VARIABLE ODBC_LINK_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-			if(NANODBC_USE_UNICODE)
-				add_definitions(-DNANODBC_USE_IODBC_WIDE_STRINGS)
-			endif()
 		endif()
 	endif()
 
@@ -129,17 +124,6 @@ IF(NOT DEFINED NANODBC_ODBC_VERSION)
 else()
 	message(STATUS "ODBC Version Override: ${NANODBC_ODBC_VERSION}")
 	add_definitions(-DNANODBC_ODBC_VERSION=${NANODBC_ODBC_VERSION})
-endif()
-
-if(NANODBC_USE_UNICODE)
-	message(STATUS "Unicode support: Turned on")
-	add_definitions(-DNANODBC_USE_UNICODE)
-	if(MSVC)
-		# Sets "Use Unicode Character Set" property in Visual Studio projects
-		add_definitions(-DUNICODE -D_UNICODE)
-	endif()
-else()
-	message(STATUS "Unicode support: Turned off")
 endif()
 
 if(NANODBC_USE_BOOST_CONVERT)
@@ -191,38 +175,108 @@ elseif(MINGW)
 endif()
 
 ########################################
-## nanodbc library target
+## nanodbc static library target - ANSI
 ########################################
-if(NANODBC_STATIC)
-	add_library(nanodbc STATIC src/nanodbc.cpp src/nanodbc.h)
-		message(STATUS "Build target: STATIC")
-else()
-	add_library(nanodbc SHARED src/nanodbc.cpp src/nanodbc.h)
-	target_link_libraries(nanodbc ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
-	message(STATUS "Build target: SHARED")
-endif()
+add_library(nanodbca_static STATIC src/nanodbc.cpp src/nanodbc.h)
+set_target_properties(nanodbca_static PROPERTIES OUTPUT_NAME nanodbca)
+target_link_libraries(nanodbca_static PUBLIC ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
 
 if(UNIX)
-	set_target_properties(nanodbc PROPERTIES
+	set_target_properties(nanodbca_static PROPERTIES
 		COMPILE_FLAGS "${ODBC_CFLAGS}"
 		LIBRARY_OUTPUT_DIRECTORY "lib")
 endif()
 
 if(NANODBC_INSTALL)
+	install(TARGETS nanodbca_static
+			LIBRARY DESTINATION lib
+			ARCHIVE DESTINATION lib)
+endif()
+
+########################################
+## nanodbc shared library target - ANSI
+########################################
+add_library(nanodbca_shared SHARED src/nanodbc.cpp src/nanodbc.h)
+set_target_properties(nanodbca_shared PROPERTIES OUTPUT_NAME nanodbca)
+target_link_libraries(nanodbca_shared PUBLIC ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
+
+if(UNIX)
+	set_target_properties(nanodbca_shared PROPERTIES
+		COMPILE_FLAGS "${ODBC_CFLAGS}"
+		LIBRARY_OUTPUT_DIRECTORY "lib")
+endif()
+
+if(NANODBC_INSTALL)
+	install(TARGETS nanodbca_shared
+			RUNTIME DESTINATION bin
+			LIBRARY DESTINATION lib
+			ARCHIVE DESTINATION lib)
+endif()
+
+########################################
+## nanodbc static library target - Unicode
+########################################
+add_library(nanodbcu_static STATIC src/nanodbc.cpp src/nanodbc.h)
+set_target_properties(nanodbcu_static PROPERTIES OUTPUT_NAME nanodbcu)
+target_link_libraries(nanodbcu_static PUBLIC ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
+target_compile_definitions(nanodbcu_static PUBLIC -DNANODBC_USE_UNICODE)
+
+if(MSVC OR MINGW)
+	# Enables "Use Unicode Character Set" in Visual Studio or MinGW
+	target_compile_definitions(nanodbcu_static PUBLIC -DUNICODE -D_UNICODE)
+endif()
+
+if(ODBC_CONFIG)
+	target_compile_definitions(nanodbcu_static PUBLIC -DNANODBC_USE_IODBC_WIDE_STRINGS)
+endif()
+
+if(UNIX)
+	set_target_properties(nanodbcu_static PROPERTIES
+		COMPILE_FLAGS "${ODBC_CFLAGS}"
+		LIBRARY_OUTPUT_DIRECTORY "lib")
+endif()
+
+if(NANODBC_INSTALL)
+	install(TARGETS nanodbcu_static
+			LIBRARY DESTINATION lib
+			ARCHIVE DESTINATION lib)
+endif()
+
+########################################
+## nanodbc shared library target - Unicode
+########################################
+add_library(nanodbcu_shared SHARED src/nanodbc.cpp src/nanodbc.h)
+set_target_properties(nanodbcu_shared PROPERTIES OUTPUT_NAME nanodbcu)
+target_link_libraries(nanodbcu_shared PUBLIC ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
+target_compile_definitions(nanodbcu_shared PUBLIC -DNANODBC_USE_UNICODE)
+
+if(MSVC OR MINGW)
+	# Enables "Use Unicode Character Set" in Visual Studio or MinGW
+	target_compile_definitions(nanodbcu_shared PUBLIC -DUNICODE -D_UNICODE)
+endif()
+
+if(ODBC_CONFIG)
+	target_compile_definitions(nanodbcu_shared PUBLIC -DNANODBC_USE_IODBC_WIDE_STRINGS)
+endif()
+
+if(UNIX)
+	set_target_properties(nanodbcu_shared PROPERTIES
+		COMPILE_FLAGS "${ODBC_CFLAGS}"
+		LIBRARY_OUTPUT_DIRECTORY "lib")
+endif()
+
+if(NANODBC_INSTALL)
+	install(TARGETS nanodbcu_shared
+			RUNTIME DESTINATION bin
+			LIBRARY DESTINATION lib
+			ARCHIVE DESTINATION lib)
+endif()
+
+########################################
+## headers
+########################################
+if(NANODBC_INSTALL)
 	install(FILES src/nanodbc.h DESTINATION include)
-	if(NANODBC_STATIC)
-		install(TARGETS nanodbc
-				ARCHIVE DESTINATION lib
-				LIBRARY DESTINATION lib)
-	else()
-		install(TARGETS nanodbc
-				RUNTIME DESTINATION bin
-				LIBRARY DESTINATION lib
-				ARCHIVE DESTINATION lib)
-	endif()
-	message(STATUS "Target install: Turned on")
-else()
-	message(STATUS "Target install: Turned off")
 endif()
 
 ########################################
