@@ -275,7 +275,9 @@ endif()
 ########################################
 ## headers
 ########################################
-install(FILES src/nanodbc.h DESTINATION include)
+if(NANODBC_INSTALL)
+	install(FILES src/nanodbc.h DESTINATION include)
+endif()
 
 ########################################
 ## examples
