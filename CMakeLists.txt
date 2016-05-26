@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.0.2)
 project(nanodbc)
 
 option(NANODBC_USE_BOOST_CONVERT "build using Boost.Locale for string convert" OFF)
