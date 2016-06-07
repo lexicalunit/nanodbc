@@ -27,4 +27,5 @@ add_dependencies(examples example_empty_ansi)
 
 add_executable(example_empty_unicode ${example_empty} example_unicode_utils.h)
 target_link_libraries(example_empty_unicode nanodbcu_shared)
+set_target_properties(example_empty_unicode PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_UNICODE)
 add_dependencies(examples example_empty_unicode)
