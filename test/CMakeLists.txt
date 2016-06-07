@@ -34,6 +34,7 @@ foreach(config "ansi" "unicode")
 			target_link_libraries(${test_name} nanodbca_shared)
 		else()
 			target_link_libraries(${test_name} nanodbcu_shared)
+            set_target_properties(${test_name} PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_UNICODE)
 		endif()
 		add_test(NAME ${test_name} COMMAND ${test_name})
 		add_custom_target(${test_item}_${config}_test
