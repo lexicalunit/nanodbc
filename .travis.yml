@@ -27,7 +27,7 @@ matrix:
             - unixodbc
             - unixodbc-dev
             - libsqliteodbc
-        # The single build job that submits the Coverity Scan file 
+        # The single build job that submits the Coverity Scan file
         coverity_scan:
           project:
             name: "lexicalunit/nanodbc"
@@ -36,6 +36,15 @@ matrix:
           build_command_prepend: mkdir -p build.coverity && pushd build.coverity && cmake -DCMAKE_BUILD_TYPE=Debug .. && popd
           build_command: cmake --build ./build.coverity
           branch_pattern: coverity_scan
+    - env: DB=sqlite USE_UNICODE=OFF USE_BOOST_CONVERT=OFF MINGW=ON WINE=wine
+      compiler: gcc
+      addons:
+        apt:
+          sources: *sources
+          packages:
+            - unixodbc
+            - unixodbc-dev
+            - libsqliteodbc
     - env: DB=sqlite USE_UNICODE=OFF USE_BOOST_CONVERT=ON
       compiler: gcc
       addons:
@@ -107,10 +116,16 @@ matrix:
 
 # before_install runs after matrix.addons.apt installation targets in the matrix
 before_install:
-  - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20
-  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20
-  - sudo update-alternatives --config gcc
-  - sudo update-alternatives --config g++
+  - if [ ! -z ${MINGW+x} ]; then sudo add-apt-repository -y ppa:tobydox/mingw-x-trusty; fi
+  - if [ ! -z ${MINGW+x} ]; then sudo apt-get update -qq || true; fi
+  - if [ ! -z ${MINGW+x} ]; then sudo apt-get install -qq -y --no-install-recommends mingw64-x-gcc wine1.6-amd64; fi
+  - if [ ! -z ${MINGW+x} ]; then export PATH=$MINGW_ROOT/bin:$PATH; fi
+  - if [ ! -z ${MINGW+x} ]; then export CC=x86_64-w64-mingw32-gcc && export CXX=x86_64-w64-mingw32-g++; fi
+  - if [ -z ${MINGW+x} ]; then sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20; fi
+  - if [ -z ${MINGW+x} ]; then sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20; fi
+  - if [ -z ${MINGW+x} ]; then sudo update-alternatives --config gcc; fi
+  - if [ -z ${MINGW+x} ]; then sudo update-alternatives --config g++; fi
+  - if [ ! -z ${MINGW+x} ]; then ${CXX} --version; fi
 
 before_script:
   - if [[ -f /etc/odbcinst.ini ]]; then export ODBCSYSINI=/etc; fi
