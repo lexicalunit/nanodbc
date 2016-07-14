@@ -148,6 +148,15 @@ else()
 	message(STATUS "Disable async features: No")
 endif()
 
+set(UNICODE_DEFINITIONS NANODBC_USE_UNICODE)
+if(MSVC OR MINGW)
+	# Enables "Use Unicode Character Set" in Visual Studio or MinGW
+	list(APPEND UNICODE_DEFINITIONS UNICODE _UNICODE)
+endif()
+if(IODBC)
+	list(APPEND UNICODE_DEFINITIONS NANODBC_USE_IODBC_WIDE_STRINGS)
+endif()
+
 ########################################
 ## find Boost if necessary
 ########################################
@@ -218,19 +227,9 @@ endif()
 ## nanodbc static library target - Unicode
 ########################################
 add_library(nanodbcu_static STATIC src/nanodbc.cpp src/nanodbc.h)
-set_target_properties(nanodbcu_static PROPERTIES OUTPUT_NAME nanodbcu)
+set_target_properties(nanodbcu_static PROPERTIES OUTPUT_NAME nanodbcu
+	COMPILE_DEFINITIONS "${UNICODE_DEFINITIONS}")
 target_link_libraries(nanodbcu_static ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
-set_target_properties(nanodbcu_static PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_UNICODE)
-
-if(MSVC OR MINGW)
-	# Enables "Use Unicode Character Set" in Visual Studio or MinGW
-	set_target_properties(nanodbcu_static PROPERTIES COMPILE_DEFINITIONS UNICODE)
-	set_target_properties(nanodbcu_static PROPERTIES COMPILE_DEFINITIONS _UNICODE)
-endif()
-
-if(IODBC)
-	set_target_properties(nanodbcu_static PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_IODBC_WIDE_STRINGS)
-endif()
 
 if(UNIX)
 	set_target_properties(nanodbcu_static PROPERTIES
@@ -248,19 +247,9 @@ endif()
 ## nanodbc shared library target - Unicode
 ########################################
 add_library(nanodbcu_shared SHARED src/nanodbc.cpp src/nanodbc.h)
-set_target_properties(nanodbcu_shared PROPERTIES OUTPUT_NAME nanodbcu)
+set_target_properties(nanodbcu_shared PROPERTIES OUTPUT_NAME nanodbcu
+	COMPILE_DEFINITIONS "${UNICODE_DEFINITIONS}")
 target_link_libraries(nanodbcu_shared ${Boost_LIBRARIES} ${ODBC_LIBRARIES})
-set_target_properties(nanodbcu_shared PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_UNICODE)
-
-if(MSVC OR MINGW)
-	# Enables "Use Unicode Character Set" in Visual Studio or MinGW
-	set_target_properties(nanodbcu_shared PROPERTIES COMPILE_DEFINITIONS UNICODE)
-	set_target_properties(nanodbcu_shared PROPERTIES COMPILE_DEFINITIONS _UNICODE)
-endif()
-
-if(IODBC)
-	set_target_properties(nanodbcu_shared PROPERTIES COMPILE_DEFINITIONS NANODBC_USE_IODBC_WIDE_STRINGS)
-endif()
 
 if(UNIX)
 	set_target_properties(nanodbcu_shared PROPERTIES
