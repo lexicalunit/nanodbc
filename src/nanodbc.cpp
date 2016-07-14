@@ -2645,21 +2645,21 @@ private:
         {
             bound_column& col = bound_columns_[i];
             col.cbdata_ = new null_type[rowset_size_];
-            if(col.blob_)
-            {
-                NANODBC_CALL_RC(
-                    SQLBindCol
-                    , rc
-                    , stmt_.native_statement_handle()
-                    , i + 1
-                    , col.ctype_
-                    , 0
-                    , 0
-                    , col.cbdata_);
-                if(!success(rc))
-                    NANODBC_THROW_DATABASE_ERROR(stmt_.native_statement_handle(), SQL_HANDLE_STMT);
-            }
-            else
+            //if(col.blob_)
+            //{
+            //    NANODBC_CALL_RC(
+            //        SQLBindCol
+            //        , rc
+            //        , stmt_.native_statement_handle()
+            //        , i + 1
+            //        , col.ctype_
+            //        , 0
+            //        , 0
+            //        , col.cbdata_);
+            //    if(!success(rc))
+            //        NANODBC_THROW_DATABASE_ERROR(stmt_.native_statement_handle(), SQL_HANDLE_STMT);
+            //}
+            //else
             {
                 col.pdata_ = new char[rowset_size_ * col.clen_];
                 NANODBC_CALL_RC(
