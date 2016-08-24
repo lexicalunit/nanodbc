@@ -2707,10 +2707,10 @@ inline void result::result_impl::get_ref_impl<string_type>(short column, string_
         else
         {
             // Type is unicode in the database, convert if necessary
-            const SQLWCHAR* s =
-                reinterpret_cast<SQLWCHAR*>(col.pdata_ + rowset_position_ * col.clen_);
+            const wide_string_type::value_type* s = reinterpret_cast<wide_string_type::value_type*>(
+                col.pdata_ + rowset_position_ * col.clen_);
             const string_type::size_type str_size =
-                col.cbdata_[rowset_position_] / sizeof(SQLWCHAR);
+                col.cbdata_[rowset_position_] / sizeof(wide_string_type::value_type);
             convert(s, str_size, result);
         }
         return;
