@@ -1332,10 +1332,10 @@ class result_iterator
 {
 public:
     typedef std::input_iterator_tag iterator_category; ///< Category of iterator.
-    typedef result value_type; ///< Values returned by iterator access.
-    typedef result* pointer; ///< Pointer to iteration values.
-    typedef result& reference; ///< Reference to iteration values.
-    typedef std::ptrdiff_t difference_type; ///< Iterator difference.
+    typedef result value_type;                         ///< Values returned by iterator access.
+    typedef result* pointer;                           ///< Pointer to iteration values.
+    typedef result& reference;                         ///< Reference to iteration values.
+    typedef std::ptrdiff_t difference_type;            ///< Iterator difference.
 
     /// Default iterator; an empty result set.
     result_iterator() = default;
@@ -1442,11 +1442,11 @@ public:
     class tables
     {
     public:
-        bool next(); ///< Move to the next result in the result set.
+        bool next();                       ///< Move to the next result in the result set.
         string_type table_catalog() const; ///< Fetch table catalog.
-        string_type table_schema() const; ///< Fetch table schema.
-        string_type table_name() const; ///< Fetch table name.
-        string_type table_type() const; ///< Fetch table type.
+        string_type table_schema() const;  ///< Fetch table schema.
+        string_type table_name() const;    ///< Fetch table name.
+        string_type table_type() const;    ///< Fetch table type.
         string_type table_remarks() const; ///< Fetch table remarks.
 
     private:
@@ -1459,23 +1459,23 @@ public:
     class columns
     {
     public:
-        bool next(); ///< Move to the next result in the result set.
-        string_type table_catalog() const; ///< Fetch table catalog.
-        string_type table_schema() const; ///< Fetch table schema.
-        string_type table_name() const; ///< Fetch table name.
-        string_type column_name() const; ///< Fetch column name.
-        short data_type() const; ///< Fetch column data type.
-        string_type type_name() const; ///< Fetch column type name.
-        long column_size() const; ///< Fetch column size.
-        long buffer_length() const; ///< Fetch buffer length.
-        short decimal_digits() const; ///< Fetch decimal digits.
+        bool next();                           ///< Move to the next result in the result set.
+        string_type table_catalog() const;     ///< Fetch table catalog.
+        string_type table_schema() const;      ///< Fetch table schema.
+        string_type table_name() const;        ///< Fetch table name.
+        string_type column_name() const;       ///< Fetch column name.
+        short data_type() const;               ///< Fetch column data type.
+        string_type type_name() const;         ///< Fetch column type name.
+        long column_size() const;              ///< Fetch column size.
+        long buffer_length() const;            ///< Fetch buffer length.
+        short decimal_digits() const;          ///< Fetch decimal digits.
         short numeric_precision_radix() const; ///< Fetch numeric precission.
-        short nullable() const; ///< True iff column is nullable.
-        string_type remarks() const; ///< Fetch column remarks.
-        string_type column_default() const; ///< Fetch column's default.
-        short sql_data_type() const; ///< Fetch column's SQL data type.
-        short sql_datetime_subtype() const; ///< Fetch datetime subtype of column.
-        long char_octet_length() const; ///< Fetch char octet length.
+        short nullable() const;                ///< True iff column is nullable.
+        string_type remarks() const;           ///< Fetch column remarks.
+        string_type column_default() const;    ///< Fetch column's default.
+        short sql_data_type() const;           ///< Fetch column's SQL data type.
+        short sql_datetime_subtype() const;    ///< Fetch datetime subtype of column.
+        long char_octet_length() const;        ///< Fetch char octet length.
 
         /// \brief Ordinal position of the column in the table.
         /// The first column in the table is number 1.
@@ -1499,11 +1499,11 @@ public:
     class primary_keys
     {
     public:
-        bool next(); ///< Move to the next result in the result set.
+        bool next();                       ///< Move to the next result in the result set.
         string_type table_catalog() const; ///< Fetch table catalog.
-        string_type table_schema() const; ///< Fetch table schema.
-        string_type table_name() const; ///< Fetch table name.
-        string_type column_name() const; ///< Fetch column name.
+        string_type table_schema() const;  ///< Fetch table schema.
+        string_type table_name() const;    ///< Fetch table name.
+        string_type column_name() const;   ///< Fetch column name.
 
         /// \brief Column sequence number in the key (starting with 1).
         /// Returns valye of KEY_SEQ column in result set returned by SQLPrimaryKeys.
@@ -1643,10 +1643,10 @@ struct driver
     struct attribute
     {
         nanodbc::string_type keyword; ///< Driver keyword attribute.
-        nanodbc::string_type value; ///< Driver attribute value.
+        nanodbc::string_type value;   ///< Driver attribute value.
     };
 
-    nanodbc::string_type name; ///< Driver name.
+    nanodbc::string_type name;       ///< Driver name.
     std::list<attribute> attributes; ///< List of driver attributes.
 };
 
