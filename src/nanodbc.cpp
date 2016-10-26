@@ -365,6 +365,8 @@ recent_error(SQLHANDLE handle, SQLSMALLINT handle_type, long& native, std::strin
 namespace nanodbc
 {
 
+static_assert(sizeof(string_type::value_type) == sizeof(char_type), "invalid char_type size");
+
 type_incompatible_error::type_incompatible_error()
     : std::runtime_error("type incompatible")
 {
