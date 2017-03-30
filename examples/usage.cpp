@@ -97,7 +97,7 @@ void run_test(nanodbc::string_type const& connection_string)
 
         const size_t elements = 4;
 
-        nanodbc::string_type::value_type xdata[elements][10] = {
+        nanodbc::char_type xdata[elements][10] = {
             NANODBC_TEXT("this"), NANODBC_TEXT("is"), NANODBC_TEXT("a"), NANODBC_TEXT("test")};
         statement.bind_strings(0, xdata);
 
@@ -143,13 +143,13 @@ void run_test(nanodbc::string_type const& connection_string)
 
         const int elements = 5;
         const int a_null = 0;
-        nanodbc::string_type::value_type const* b_null = NANODBC_TEXT("");
+        nanodbc::char_type const* b_null = NANODBC_TEXT("");
         int a_data[elements] = {0, 88, 0, 0, 0};
-        nanodbc::string_type::value_type b_data[elements][10] = {NANODBC_TEXT(""),
-                                                                 NANODBC_TEXT("non-null"),
-                                                                 NANODBC_TEXT(""),
-                                                                 NANODBC_TEXT(""),
-                                                                 NANODBC_TEXT("")};
+        nanodbc::char_type b_data[elements][10] = {NANODBC_TEXT(""),
+                                                   NANODBC_TEXT("non-null"),
+                                                   NANODBC_TEXT(""),
+                                                   NANODBC_TEXT(""),
+                                                   NANODBC_TEXT("")};
 
         statement.bind(0, a_data, elements, &a_null);
         statement.bind_strings(1, b_data, b_null);
@@ -167,8 +167,7 @@ void run_test(nanodbc::string_type const& connection_string)
 
         const int elements = 2;
         int a_data[elements] = {0, 42};
-        nanodbc::string_type::value_type b_data[elements][10] = {
-            NANODBC_TEXT(""), NANODBC_TEXT("every")};
+        nanodbc::char_type b_data[elements][10] = {NANODBC_TEXT(""), NANODBC_TEXT("every")};
         bool nulls[elements] = {true, false};
 
         statement.bind(0, a_data, elements, nulls);

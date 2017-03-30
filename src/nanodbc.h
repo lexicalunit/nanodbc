@@ -156,6 +156,7 @@ typedef std::u16string string_type;
 typedef std::string string_type;
 #define NANODBC_TEXT(s) s
 #endif
+typedef string_type::value_type char_type;
 
 #if defined(_WIN64)
 // LLP64 machine: Windows
