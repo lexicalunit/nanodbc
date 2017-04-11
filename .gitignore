@@ -16,7 +16,6 @@
 /.vscode
 /*build*/
 /*.local.bat
-/doc
 /docker_build/
 example
 example.dSYM/
