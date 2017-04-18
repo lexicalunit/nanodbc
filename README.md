@@ -39,6 +39,8 @@ existing ODBC API calls.
 
 ## Branches
 
+[![Join the chat at https://gitter.im/lexicalunit/nanodbc](https://badges.gitter.im/lexicalunit/nanodbc.svg)](https://gitter.im/lexicalunit/nanodbc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 | Version | Description |
 |:--- |:--- |
 | `release` | Most recent published version that's deemed "stable". Review the [changelog notes](CHANGELOG.md) to see if this version is right for you. |
