@@ -13,6 +13,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -qqy \
         make \
         mysql-client \
         mysql-server \
+        libsqliteodbc \
         sqlite3 \
         unixodbc \
         unixodbc-dev \
