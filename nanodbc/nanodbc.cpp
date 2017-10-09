@@ -116,6 +116,10 @@
 // MARK: Unicode -
 // clang-format on
 
+// Import string types defined in header file, so we don't have to type nanodbc:: everywhere
+using nanodbc::wide_char_t;
+using nanodbc::wide_string;
+
 #ifdef NANODBC_ENABLE_UNICODE
 #define NANODBC_FUNC(f) f##W
 #define NANODBC_SQLCHAR SQLWCHAR
@@ -125,18 +129,14 @@
 #endif
 
 #ifdef NANODBC_USE_IODBC_WIDE_STRINGS
-typedef std::u32string wide_string;
 #define NANODBC_CODECVT_TYPE std::codecvt_utf8
 #else
 #ifdef _MSC_VER
-typedef std::wstring wide_string;
 #define NANODBC_CODECVT_TYPE std::codecvt_utf8_utf16
 #else
-typedef std::u16string wide_string;
 #define NANODBC_CODECVT_TYPE std::codecvt_utf8_utf16
 #endif
 #endif
-typedef wide_string::value_type wide_char_t;
 
 #if defined(_MSC_VER)
 #ifndef NANODBC_ENABLE_UNICODE
@@ -264,7 +264,7 @@ inline void convert(const wide_string& in, std::string& out)
     out = utf_to_utf<char>(in.c_str(), in.c_str() + in.size());
 #elif defined(__GNUC__) && (__GNUC__ < 5)
     std::vector<wchar_t> characters(in.begin(), in.end());
-    const wchar_t * source = characters.data();
+    const wchar_t* source = characters.data();
     size_t size = wcsnrtombs(nullptr, &source, characters.size(), 0, nullptr);
     if (size == std::string::npos)
         throw std::range_error("UTF-16 -> UTF-8 conversion error");
@@ -281,7 +281,6 @@ inline void convert(const wide_string& in, std::string& out)
 #endif
 }
 
-#ifdef NANODBC_ENABLE_UNICODE
 inline void convert(const std::string& in, wide_string& out)
 {
 #ifdef NANODBC_ENABLE_BOOST
@@ -292,7 +291,7 @@ inline void convert(const std::string& in, wide_string& out)
     if (size == std::string::npos)
         throw std::range_error("UTF-8 -> UTF-16 conversion error");
     std::vector<wchar_t> characters(size);
-    const char * source = in.data();
+    const char* source = in.data();
     mbsnrtowcs(&characters[0], &source, in.length(), characters.size(), nullptr);
     out = std::string(characters.begin(), characters.end());
 #elif defined(_MSC_VER) && (_MSC_VER >= 1900)
@@ -311,12 +310,11 @@ inline void convert(const wide_string& in, wide_string& out)
 {
     out = in;
 }
-#else
+
 inline void convert(const std::string& in, std::string& out)
 {
     out = in;
 }
-#endif
 
 // Attempts to get the most recent ODBC error as a string.
 // Always returns std::string, even in unicode mode.
@@ -592,23 +590,27 @@ struct sql_ctype<double>
 };
 
 template <>
-struct sql_ctype<nanodbc::string::value_type>
+struct sql_ctype<wide_string::value_type>
 {
-#ifdef NANODBC_ENABLE_UNICODE
     static const SQLSMALLINT value = SQL_C_WCHAR;
-#else
-    static const SQLSMALLINT value = SQL_C_CHAR;
-#endif
 };
 
 template <>
-struct sql_ctype<nanodbc::string>
+struct sql_ctype<wide_string>
 {
-#ifdef NANODBC_ENABLE_UNICODE
     static const SQLSMALLINT value = SQL_C_WCHAR;
-#else
+};
+
+template <>
+struct sql_ctype<std::string::value_type>
+{
     static const SQLSMALLINT value = SQL_C_CHAR;
-#endif
+};
+
+template <>
+struct sql_ctype<std::string>
+{
+    static const SQLSMALLINT value = SQL_C_CHAR;
 };
 
 template <>
@@ -1770,7 +1772,7 @@ public:
     }
 
     // calls actual ODBC bind parameter function
-    template <class T>
+    template <class T, typename std::enable_if<!is_character<T>::value, int>::type = 0>
     void bind_parameter(bound_parameter const& param, bound_buffer<T>& buffer)
     {
         auto const buffer_size = buffer.value_size_ > 0 ? buffer.value_size_ : param.size_;
@@ -1789,6 +1791,32 @@ public:
             (SQLPOINTER)buffer.values_, // parameter value
             buffer_size,                // buffer length
             bind_len_or_null_[param.index_].data());
+
+        if (!success(rc))
+            NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
+    }
+
+    // Supports code like: query.bind(0, std_string.c_str())
+    // In this case, we need to pass nullptr to the final parameter of SQLBindParameter().
+    template <class T, typename std::enable_if<is_character<T>::value, int>::type = 0>
+    void bind_parameter(bound_parameter const& param, bound_buffer<T>& buffer)
+    {
+        auto const buffer_size = buffer.value_size_ > 0 ? buffer.value_size_ : param.size_;
+
+        RETCODE rc;
+        NANODBC_CALL_RC(
+            SQLBindParameter,
+            rc,
+            stmt_,               // handle
+            param.index_ + 1,    // parameter number
+            param.iotype_,       // input or output type
+            sql_ctype<T>::value, // value type
+            param.type_,         // parameter type
+            param.size_,         // column size ignored for many types, but needed for strings
+            param.scale_,        // decimal digits
+            (SQLPOINTER)buffer.values_, // parameter value
+            buffer_size,                // buffer length
+            (buffer.size_ <= 1 ? nullptr : bind_len_or_null_[param.index_].data()));
 
         if (!success(rc))
             NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
@@ -1856,21 +1884,23 @@ public:
         bind_parameter(param, buffer);
     }
 
+    template <class T, typename = enable_if_character<T>>
     void bind_strings(
         param_direction direction,
         short param_index,
-        string::value_type const* values,
+        T const* values,
         std::size_t value_size,
         std::size_t batch_size,
         bool const* nulls = nullptr,
-        string::value_type const* null_sentry = nullptr);
+        T const* null_sentry = nullptr);
 
+    template <class T, typename = enable_if_string<T>>
     void bind_strings(
         param_direction direction,
         short param_index,
-        std::vector<string> const& values,
+        std::vector<T> const& values,
         bool const* nulls = nullptr,
-        string::value_type const* null_sentry = nullptr);
+        typename T::value_type const* null_sentry = nullptr);
 
     // handles multiple null values
     void bind_null(short param_index, std::size_t batch_size)
@@ -1908,7 +1938,10 @@ private:
     bool open_;
     class connection conn_;
     std::map<short, std::vector<null_type>> bind_len_or_null_;
-    std::map<short, std::vector<string::value_type>> string_data_;
+    std::map<
+        short,
+        std::tuple<std::vector<wide_string::value_type>, std::vector<std::string::value_type>>>
+        string_data_;
     std::map<short, std::vector<uint8_t>> binary_data_;
 
 #if defined(NANODBC_DO_ASYNC_IMPL)
@@ -1918,34 +1951,6 @@ private:
     void* async_event_;          // currently active event handle for async notifications
 #endif
 };
-
-// Supports code like: query.bind(0, std_string.c_str())
-// In this case, we need to pass nullptr to the final parameter of SQLBindParameter().
-template <>
-void statement::statement_impl::bind_parameter<string::value_type>(
-    bound_parameter const& param,
-    bound_buffer<string::value_type>& buffer)
-{
-    auto const buffer_size = buffer.value_size_ > 0 ? buffer.value_size_ : param.size_;
-
-    RETCODE rc;
-    NANODBC_CALL_RC(
-        SQLBindParameter,
-        rc,
-        stmt_,                                // handle
-        param.index_ + 1,                     // parameter number
-        param.iotype_,                        // input or output type
-        sql_ctype<string::value_type>::value, // value type
-        param.type_,                          // parameter type
-        param.size_,                // column size ignored for many types, but needed for strings
-        param.scale_,               // decimal digits
-        (SQLPOINTER)buffer.values_, // parameter value
-        buffer_size,                // buffer length
-        (buffer.size_ <= 1 ? nullptr : bind_len_or_null_[param.index_].data()));
-
-    if (!success(rc))
-        NANODBC_THROW_DATABASE_ERROR(stmt_, SQL_HANDLE_STMT);
-}
 
 template <class T>
 void statement::statement_impl::bind(
@@ -1975,13 +1980,16 @@ void statement::statement_impl::bind(
     bind_parameter(param, buffer);
 }
 
+template <class T, typename>
 void statement::statement_impl::bind_strings(
     param_direction direction,
     short param_index,
-    std::vector<string> const& values,
+    std::vector<T> const& values,
     bool const* nulls /*= nullptr*/,
-    string::value_type const* null_sentry /*= nullptr*/)
+    typename T::value_type const* null_sentry /*= nullptr*/)
 {
+    using string_vector = std::vector<typename T::value_type>;
+    string_vector& string_data = std::get<string_vector>(string_data_[param_index]);
 
     size_t const batch_size = values.size();
     bound_parameter param;
@@ -1995,32 +2003,24 @@ void statement::statement_impl::bind_strings(
     // add space for null terminator
     ++max_length;
 
-    string_data_[param_index] = std::vector<string::value_type>(batch_size * max_length, 0);
+    string_data = string_vector(batch_size * max_length, 0);
     for (std::size_t i = 0; i < batch_size; ++i)
     {
-        std::copy(
-            values[i].begin(),
-            values[i].end(),
-            string_data_[param_index].data() + (i * max_length));
+        std::copy(values[i].begin(), values[i].end(), string_data.data() + (i * max_length));
     }
     bind_strings(
-        direction,
-        param_index,
-        string_data_[param_index].data(),
-        max_length,
-        batch_size,
-        nulls,
-        null_sentry);
+        direction, param_index, string_data.data(), max_length, batch_size, nulls, null_sentry);
 }
 
+template <class T, typename>
 void statement::statement_impl::bind_strings(
     param_direction direction,
     short param_index,
-    string::value_type const* values,
+    T const* values,
     std::size_t value_size,
     std::size_t batch_size,
     bool const* nulls /*= nullptr*/,
-    string::value_type const* null_sentry /*= nullptr*/)
+    T const* null_sentry /*= nullptr*/)
 {
     bound_parameter param;
     prepare_bind(param_index, batch_size, direction, param);
@@ -2029,21 +2029,11 @@ void statement::statement_impl::bind_strings(
     {
         for (std::size_t i = 0; i < batch_size; ++i)
         {
-            const string s_lhs(values + i * value_size, values + (i + 1) * value_size);
-            const string s_rhs(null_sentry);
-#if NANODBC_ENABLE_UNICODE
-            std::string narrow_lhs;
-            narrow_lhs.reserve(s_lhs.size());
-            convert(s_lhs, narrow_lhs);
-            std::string narrow_rhs;
-            narrow_rhs.reserve(s_rhs.size());
-            convert(s_rhs, narrow_rhs);
-            if (std::strncmp(narrow_lhs.c_str(), narrow_rhs.c_str(), value_size) != 0)
+            const std::basic_string<T> s_lhs(
+                values + i * value_size, values + (i + 1) * value_size);
+            const std::basic_string<T> s_rhs(null_sentry);
+            if (!equals(s_lhs, s_rhs))
                 bind_len_or_null_[param_index][i] = SQL_NTS;
-#else
-            if (std::strncmp(s_lhs.c_str(), s_rhs.c_str(), value_size) != 0)
-                bind_len_or_null_[param_index][i] = SQL_NTS;
-#endif
         }
     }
     else if (nulls)
@@ -2062,9 +2052,28 @@ void statement::statement_impl::bind_strings(
         }
     }
 
-    auto const buffer_length = value_size * sizeof(string::value_type);
-    bound_buffer<string::value_type> buffer(values, batch_size, buffer_length);
+    auto const buffer_length = value_size * sizeof(T);
+    bound_buffer<T> buffer(values, batch_size, buffer_length);
     bind_parameter(param, buffer);
+}
+
+template <>
+bool statement::statement_impl::equals(const std::string& lhs, const std::string& rhs)
+{
+    return std::strncmp(lhs.c_str(), rhs.c_str(), lhs.size()) == 0;
+}
+
+template <>
+bool statement::statement_impl::equals(const wide_string& lhs, const wide_string& rhs)
+{
+    // convert narrow strings, cause wcsncmp doesn't work on some machines
+    std::string narrow_lhs;
+    narrow_lhs.reserve(lhs.size());
+    convert(lhs, narrow_lhs);
+    std::string narrow_rhs;
+    narrow_rhs.reserve(rhs.size());
+    convert(rhs, narrow_rhs);
+    return equals(narrow_lhs, narrow_rhs);
 }
 
 template <>
@@ -2502,6 +2511,9 @@ private:
     template <class T>
     void get_ref_impl(short column, T& result) const;
 
+    template <class T, typename std::enable_if<is_string<T>::value, int>::type = 0>
+    void get_ref_impl(short column, std::basic_string<typename T::value_type>& result) const;
+
     void before_move() NANODBC_NOEXCEPT
     {
         for (short i = 0; i < bound_columns_size_; ++i)
@@ -2819,8 +2831,10 @@ inline void result::result_impl::get_ref_impl<timestamp>(short column, timestamp
     throw type_incompatible_error();
 }
 
-template <>
-inline void result::result_impl::get_ref_impl<string>(short column, string& result) const
+template <class T, typename std::enable_if<is_string<T>::value, int>::type>
+inline void result::result_impl::get_ref_impl(
+    short column,
+    std::basic_string<typename T::value_type>& result) const
 {
     bound_column& col = bound_columns_[column];
     const SQLULEN column_size = col.sqlsize_;
@@ -3807,8 +3821,27 @@ unsigned long statement::parameter_size(short param_index) const
     template void statement::bind(                                                                 \
         short, const type*, std::size_t, const bool*, param_direction) /* n-ary, flags */
 
+#define NANODBC_INSTANTIATE_BIND_STRINGS(type)                                                     \
+    template void statement::bind_strings(short, std::vector<type> const&, param_direction);       \
+    template void statement::bind_strings(                                                         \
+        short, std::vector<type> const&, type::value_type const*, param_direction);                \
+    template void statement::bind_strings(                                                         \
+        short, std::vector<type> const&, bool const*, param_direction);                            \
+    template void statement::bind_strings(                                                         \
+        short, const type::value_type*, std::size_t, std::size_t, param_direction);                \
+    template void statement::bind_strings(                                                         \
+        short,                                                                                     \
+        type::value_type const*,                                                                   \
+        std::size_t,                                                                               \
+        std::size_t,                                                                               \
+        type::value_type const*,                                                                   \
+        param_direction);                                                                          \
+    template void statement::bind_strings(                                                         \
+        short, type::value_type const*, std::size_t, std::size_t, bool const*, param_direction)
+
 // The following are the only supported instantiations of statement::bind().
-NANODBC_INSTANTIATE_BINDS(string::value_type);
+NANODBC_INSTANTIATE_BINDS(std::string::value_type);
+NANODBC_INSTANTIATE_BINDS(wide_string::value_type);
 NANODBC_INSTANTIATE_BINDS(short);
 NANODBC_INSTANTIATE_BINDS(unsigned short);
 NANODBC_INSTANTIATE_BINDS(int);
@@ -3822,6 +3855,9 @@ NANODBC_INSTANTIATE_BINDS(double);
 NANODBC_INSTANTIATE_BINDS(date);
 NANODBC_INSTANTIATE_BINDS(time);
 NANODBC_INSTANTIATE_BINDS(timestamp);
+
+NANODBC_INSTANTIATE_BIND_STRINGS(std::string);
+NANODBC_INSTANTIATE_BIND_STRINGS(wide_string);
 
 #undef NANODBC_INSTANTIATE_BINDS
 
@@ -3889,17 +3925,19 @@ void statement::bind(
     impl_->bind(direction, param_index, values, nullptr, null_sentry);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    std::vector<string> const& values,
+    std::vector<T> const& values,
     param_direction direction)
 {
     impl_->bind_strings(direction, param_index, values);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    string::value_type const* values,
+    T const* values,
     std::size_t value_size,
     std::size_t batch_size,
     param_direction direction)
@@ -3907,21 +3945,23 @@ void statement::bind_strings(
     impl_->bind_strings(direction, param_index, values, value_size, batch_size);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    string::value_type const* values,
+    T const* values,
     std::size_t value_size,
     std::size_t batch_size,
-    string::value_type const* null_sentry,
+    T const* null_sentry,
     param_direction direction)
 {
     impl_->bind_strings(
         direction, param_index, values, value_size, batch_size, nullptr, null_sentry);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    string::value_type const* values,
+    T const* values,
     std::size_t value_size,
     std::size_t batch_size,
     bool const* nulls,
@@ -3930,18 +3970,20 @@ void statement::bind_strings(
     impl_->bind_strings(direction, param_index, values, value_size, batch_size, nulls);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    std::vector<string> const& values,
-    string::value_type const* null_sentry,
+    std::vector<T> const& values,
+    typename T::value_type const* null_sentry,
     param_direction direction)
 {
     impl_->bind_strings(direction, param_index, values, nullptr, null_sentry);
 }
 
+template <class T, typename>
 void statement::bind_strings(
     short param_index,
-    std::vector<string> const& values,
+    std::vector<T> const& values,
     bool const* nulls,
     param_direction direction)
 {
@@ -4655,7 +4697,8 @@ result::operator bool() const
 }
 
 // The following are the only supported instantiations of result::get_ref().
-template void result::get_ref(short, string::value_type&) const;
+template void result::get_ref(short, std::string::value_type&) const;
+template void result::get_ref(short, wide_string::value_type&) const;
 template void result::get_ref(short, short&) const;
 template void result::get_ref(short, unsigned short&) const;
 template void result::get_ref(short, int&) const;
@@ -4672,7 +4715,8 @@ template void result::get_ref(short, time&) const;
 template void result::get_ref(short, timestamp&) const;
 template void result::get_ref(short, std::vector<std::uint8_t>&) const;
 
-template void result::get_ref(const string&, string::value_type&) const;
+template void result::get_ref(const string&, std::string::value_type&) const;
+template void result::get_ref(const string&, wide_string::value_type&) const;
 template void result::get_ref(const string&, short&) const;
 template void result::get_ref(const string&, unsigned short&) const;
 template void result::get_ref(const string&, int&) const;
@@ -4690,7 +4734,10 @@ template void result::get_ref(const string&, timestamp&) const;
 template void result::get_ref(const string&, std::vector<std::uint8_t>&) const;
 
 // The following are the only supported instantiations of result::get_ref() with fallback.
-template void result::get_ref(short, const string::value_type&, string::value_type&) const;
+template void
+result::get_ref(short, const std::string::value_type&, std::string::value_type&) const;
+template void
+result::get_ref(short, const wide_string::value_type&, wide_string::value_type&) const;
 template void result::get_ref(short, const short&, short&) const;
 template void result::get_ref(short, const unsigned short&, unsigned short&) const;
 template void result::get_ref(short, const int&, int&) const;
@@ -4708,7 +4755,10 @@ template void result::get_ref(short, const timestamp&, timestamp&) const;
 template void
 result::get_ref(short, const std::vector<std::uint8_t>&, std::vector<std::uint8_t>&) const;
 
-template void result::get_ref(const string&, const string::value_type&, string::value_type&) const;
+template void
+result::get_ref(const string&, const std::string::value_type&, std::string::value_type&) const;
+template void
+result::get_ref(const string&, const wide_string::value_type&, wide_string::value_type&) const;
 template void result::get_ref(const string&, const short&, short&) const;
 template void result::get_ref(const string&, const unsigned short&, unsigned short&) const;
 template void result::get_ref(const string&, const int&, int&) const;
@@ -4720,7 +4770,8 @@ template void
 result::get_ref(const string&, const unsigned long long int&, unsigned long long int&) const;
 template void result::get_ref(const string&, const float&, float&) const;
 template void result::get_ref(const string&, const double&, double&) const;
-template void result::get_ref(const string&, const string&, string&) const;
+template void result::get_ref(const string&, const std::string&, std::string&) const;
+template void result::get_ref(const string&, const wide_string&, wide_string&) const;
 template void result::get_ref(const string&, const date&, date&) const;
 template void result::get_ref(const string&, const time&, time&) const;
 template void result::get_ref(const string&, const timestamp&, timestamp&) const;
@@ -4728,7 +4779,8 @@ template void
 result::get_ref(const string&, const std::vector<std::uint8_t>&, std::vector<std::uint8_t>&) const;
 
 // The following are the only supported instantiations of result::get().
-template string::value_type result::get(short) const;
+template std::string::value_type result::get(short) const;
+template wide_string::value_type result::get(short) const;
 template short result::get(short) const;
 template unsigned short result::get(short) const;
 template int result::get(short) const;
@@ -4739,13 +4791,15 @@ template long long int result::get(short) const;
 template unsigned long long int result::get(short) const;
 template float result::get(short) const;
 template double result::get(short) const;
-template string result::get(short) const;
+template std::string result::get(short) const;
+template wide_string result::get(short) const;
 template date result::get(short) const;
 template time result::get(short) const;
 template timestamp result::get(short) const;
 template std::vector<std::uint8_t> result::get(short) const;
 
-template string::value_type result::get(const string&) const;
+template std::string::value_type result::get(const string&) const;
+template wide_string::value_type result::get(const string&) const;
 template short result::get(const string&) const;
 template unsigned short result::get(const string&) const;
 template int result::get(const string&) const;
@@ -4756,14 +4810,16 @@ template long long int result::get(const string&) const;
 template unsigned long long int result::get(const string&) const;
 template float result::get(const string&) const;
 template double result::get(const string&) const;
-template string result::get(const string&) const;
+template std::string result::get(const string&) const;
+template wide_string result::get(const string&) const;
 template date result::get(const string&) const;
 template time result::get(const string&) const;
 template timestamp result::get(const string&) const;
 template std::vector<std::uint8_t> result::get(const string&) const;
 
 // The following are the only supported instantiations of result::get() with fallback.
-template string::value_type result::get(short, const string::value_type&) const;
+template std::string::value_type result::get(short, const std::string::value_type&) const;
+template wide_string::value_type result::get(short, const wide_string::value_type&) const;
 template short result::get(short, const short&) const;
 template unsigned short result::get(short, const unsigned short&) const;
 template int result::get(short, const int&) const;
@@ -4774,13 +4830,15 @@ template long long int result::get(short, const long long int&) const;
 template unsigned long long int result::get(short, const unsigned long long int&) const;
 template float result::get(short, const float&) const;
 template double result::get(short, const double&) const;
-template string result::get(short, const string&) const;
+template std::string result::get(short, const std::string&) const;
+template wide_string result::get(short, const wide_string&) const;
 template date result::get(short, const date&) const;
 template time result::get(short, const time&) const;
 template timestamp result::get(short, const timestamp&) const;
 template std::vector<std::uint8_t> result::get(short, const std::vector<std::uint8_t>&) const;
 
-template string::value_type result::get(const string&, const string::value_type&) const;
+template std::string::value_type result::get(const string&, const std::string::value_type&) const;
+template wide_string::value_type result::get(const string&, const wide_string::value_type&) const;
 template short result::get(const string&, const short&) const;
 template unsigned short result::get(const string&, const unsigned short&) const;
 template int result::get(const string&, const int&) const;
@@ -4791,7 +4849,8 @@ template long long int result::get(const string&, const long long int&) const;
 template unsigned long long int result::get(const string&, const unsigned long long int&) const;
 template float result::get(const string&, const float&) const;
 template double result::get(const string&, const double&) const;
-template string result::get(const string&, const string&) const;
+template std::string result::get(const string&, const std::string&) const;
+template wide_string result::get(const string&, const wide_string&) const;
 template date result::get(const string&, const date&) const;
 template time result::get(const string&, const time&) const;
 template timestamp result::get(const string&, const timestamp&) const;
