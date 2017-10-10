@@ -354,16 +354,16 @@ struct timestamp
 template <typename T>
 using is_string = std::integral_constant<
     bool,
-    std::is_same<std::decay_t<T>, std::string>::value ||
-        std::is_same<std::decay_t<T>, wide_string>::value>;
+    std::is_same<typename std::decay<T>::type, std::string>::value ||
+        std::is_same<typename std::decay<T>::type, wide_string>::value>;
 
 /// \brief A type trait for testing if a type is a character compatible with the current nanodbc
 /// configuration
 template <typename T>
 using is_character = std::integral_constant<
     bool,
-    std::is_same<std::decay_t<T>, std::string::value_type>::value ||
-        std::is_same<std::decay_t<T>, wide_char_t>::value>;
+    std::is_same<typename std::decay<T>::type, std::string::value_type>::value ||
+        std::is_same<typename std::decay<T>::type, wide_char_t>::value>;
 
 template <typename T>
 using enable_if_string = typename std::enable_if<is_string<T>::value>::type;

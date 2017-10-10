@@ -287,13 +287,13 @@ inline void convert(const std::string& in, wide_string& out)
     using boost::locale::conv::utf_to_utf;
     out = utf_to_utf<wide_char_t>(in.c_str(), in.c_str() + in.size());
 #elif defined(__GNUC__) && (__GNUC__ < 5)
-    size_t size = mbsnrtowcs(nullptr, in.data(), in.length(), 0, nullptr);
+    const char* source = in.data();
+    size_t size = mbsnrtowcs(nullptr, &source, in.length(), 0, nullptr);
     if (size == std::string::npos)
         throw std::range_error("UTF-8 -> UTF-16 conversion error");
     std::vector<wchar_t> characters(size);
-    const char* source = in.data();
     mbsnrtowcs(&characters[0], &source, in.length(), characters.size(), nullptr);
-    out = std::string(characters.begin(), characters.end());
+    out = wide_string(characters.begin(), characters.end());
 #elif defined(_MSC_VER) && (_MSC_VER >= 1900)
     // Workaround for confirmed bug in VS2015 and VS2017 too
     // See: https://connect.microsoft.com/VisualStudio/Feedback/Details/1403302
@@ -1242,6 +1242,7 @@ public:
         , open_(false)
         , conn_()
         , bind_len_or_null_()
+        , wide_string_data_()
         , string_data_()
         , binary_data_()
 #if defined(NANODBC_DO_ASYNC_IMPL)
@@ -1258,6 +1259,7 @@ public:
         , open_(false)
         , conn_()
         , bind_len_or_null_()
+        , wide_string_data_()
         , string_data_()
         , binary_data_()
 #if defined(NANODBC_DO_ASYNC_IMPL)
@@ -1933,15 +1935,16 @@ public:
         return lhs == rhs;
     }
 
+    template <class T>
+    std::vector<T>& get_bound_string_data(short param_index);
+
 private:
     HSTMT stmt_;
     bool open_;
     class connection conn_;
     std::map<short, std::vector<null_type>> bind_len_or_null_;
-    std::map<
-        short,
-        std::tuple<std::vector<wide_string::value_type>, std::vector<std::string::value_type>>>
-        string_data_;
+    std::map<short, std::vector<wide_string::value_type>> wide_string_data_;
+    std::map<short, std::vector<std::string::value_type>> string_data_;
     std::map<short, std::vector<uint8_t>> binary_data_;
 
 #if defined(NANODBC_DO_ASYNC_IMPL)
@@ -1989,7 +1992,7 @@ void statement::statement_impl::bind_strings(
     typename T::value_type const* null_sentry /*= nullptr*/)
 {
     using string_vector = std::vector<typename T::value_type>;
-    string_vector& string_data = std::get<string_vector>(string_data_[param_index]);
+    string_vector& string_data = get_bound_string_data<typename T::value_type>(param_index);
 
     size_t const batch_size = values.size();
     bound_parameter param;
@@ -2094,6 +2097,20 @@ bool statement::statement_impl::equals(const timestamp& lhs, const timestamp& rh
     return lhs.year == rhs.year && lhs.month == rhs.month && lhs.day == rhs.day &&
            lhs.hour == rhs.hour && lhs.min == rhs.min && lhs.sec == rhs.sec &&
            lhs.fract == rhs.fract;
+}
+
+template <>
+std::vector<wide_string::value_type>&
+statement::statement_impl::get_bound_string_data(short param_index)
+{
+    return wide_string_data_[param_index];
+}
+
+template <>
+std::vector<std::string::value_type>&
+statement::statement_impl::get_bound_string_data(short param_index)
+{
+    return string_data_[param_index];
 }
 
 } // namespace nanodbc
