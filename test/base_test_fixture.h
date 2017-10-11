@@ -35,6 +35,7 @@
 #endif
 #include <sql.h>
 #include <sqlext.h>
+#include <locale>
 
 namespace nanodbc
 {
@@ -51,8 +52,8 @@ inline nanodbc::string convert(std::string const& in)
         "NANODBC_ENABLE_UNICODE mode requires wide string");
     nanodbc::string out;
 #ifdef NANODBC_ENABLE_BOOST
-	using boost::locale::conv::utf_to_utf;
-	out = utf_to_utf<nanodbc::string::value_type>(in.c_str(), in.c_str() + in.size());
+    using boost::locale::conv::utf_to_utf;
+    out = utf_to_utf<nanodbc::string::value_type>(in.c_str(), in.c_str() + in.size());
 #elif defined(__GNUC__) && __GNUC__ < 5
     std::vector<wchar_t> characters(in.length());
     for (size_t i = 0; i < in.length(); i++)
@@ -82,8 +83,8 @@ inline std::string convert(nanodbc::string const& in)
     static_assert(sizeof(nanodbc::string::value_type) > 1, "string must be wide");
     std::string out;
 #ifdef NANODBC_ENABLE_BOOST
-	using boost::locale::conv::utf_to_utf;
-	out = utf_to_utf<char>(in.c_str(), in.c_str() + in.size());
+    using boost::locale::conv::utf_to_utf;
+    out = utf_to_utf<char>(in.c_str(), in.c_str() + in.size());
 #elif defined(__GNUC__) && __GNUC__ < 5
     size_t size = mbsnrtowcs(nullptr, in.data(), in.length(), 0, nullptr);
     if (size == std::string::npos)
