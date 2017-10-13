@@ -2069,7 +2069,10 @@ bool statement::statement_impl::equals(const std::string& lhs, const std::string
 template <>
 bool statement::statement_impl::equals(const wide_string& lhs, const wide_string& rhs)
 {
-    // convert narrow strings, cause wcsncmp doesn't work on some machines
+    // e6059ff3a79062f83256b9d1d3c9c8368798781e
+    // Functions like `swprintf()`, `wcsftime()`, `wcsncmp()` can not be used
+    // with `u16string` types. Instead, prefers to narrow unicode string to
+    // work with them, and then widen them after work has been completed.
     std::string narrow_lhs;
     narrow_lhs.reserve(lhs.size());
     convert(lhs, narrow_lhs);
@@ -2700,7 +2703,7 @@ private:
             case SQL_CHAR:
             case SQL_VARCHAR:
             case SQL_NVARCHAR:
-                col.ctype_ = SQL_C_CHAR;
+                col.ctype_ = sql_ctype<std::string>::value;
                 col.clen_ = (col.sqlsize_ + 1) * sizeof(SQLCHAR);
                 if (is_blob)
                 {
@@ -2710,7 +2713,7 @@ private:
                 break;
             case SQL_WCHAR:
             case SQL_WVARCHAR:
-                col.ctype_ = SQL_C_WCHAR;
+                col.ctype_ = sql_ctype<wide_string>::value;
                 col.clen_ = (col.sqlsize_ + 1) * sizeof(SQLWCHAR);
                 if (is_blob)
                 {
@@ -2719,7 +2722,7 @@ private:
                 }
                 break;
             case SQL_LONGVARCHAR:
-                col.ctype_ = SQL_C_CHAR;
+                col.ctype_ = sql_ctype<std::string>::value;
                 col.blob_ = true;
                 col.clen_ = 0;
                 break;
