@@ -2528,11 +2528,17 @@ public:
     }
 
 private:
-    template <class T>
+    template <class T, typename std::enable_if<!is_string<T>::value, int>::type = 0>
     void get_ref_impl(short column, T& result) const;
 
     template <class T, typename std::enable_if<is_string<T>::value, int>::type = 0>
-    void get_ref_impl(short column, std::basic_string<typename T::value_type>& result) const;
+    void get_ref_impl(short column, T& result) const;
+
+    template <class T, typename std::enable_if<!is_character<T>::value, int>::type = 0>
+    void get_ref_from_string_column(short column, T& result) const;
+
+    template <class T, typename std::enable_if<is_character<T>::value, int>::type = 0>
+    void get_ref_from_string_column(short column, T& result) const;
 
     void before_move() NANODBC_NOEXCEPT
     {
@@ -2852,9 +2858,7 @@ inline void result::result_impl::get_ref_impl<timestamp>(short column, timestamp
 }
 
 template <class T, typename std::enable_if<is_string<T>::value, int>::type>
-inline void result::result_impl::get_ref_impl(
-    short column,
-    std::basic_string<typename T::value_type>& result) const
+inline void result::result_impl::get_ref_impl(short column, T& result) const
 {
     bound_column& col = bound_columns_[column];
     const SQLULEN column_size = col.sqlsize_;
@@ -3195,7 +3199,75 @@ inline void result::result_impl::get_ref_impl<std::vector<std::uint8_t>>(
     throw type_incompatible_error();
 }
 
-template <class T>
+namespace detail
+{
+auto from_string(std::string const& s, float)
+{
+    return std::stof(s);
+}
+
+auto from_string(std::string const& s, double)
+{
+    return std::stod(s);
+}
+
+auto from_string(std::string const& s, long long)
+{
+    return std::stoll(s);
+}
+
+auto from_string(std::string const& s, unsigned long long)
+{
+    return std::stoull(s);
+}
+
+template <typename R, typename std::enable_if<std::is_integral<R>::value, int>::type = 0>
+auto from_string(std::string const& s, R)
+{
+    auto integer = from_string(
+        s,
+        typename std::conditional<std::is_signed<R>::value, long long, unsigned long long>::type{});
+    if (integer > std::numeric_limits<R>::max() || integer < std::numeric_limits<R>::min())
+        throw std::range_error("from_string argument out of range");
+    return static_cast<R>(integer);
+}
+}
+
+template <typename R>
+auto from_string(std::string const& s) -> R
+{
+    return detail::from_string(s, R{});
+}
+
+template <class T, typename std::enable_if<is_character<T>::value, int>::type>
+void result::result_impl::get_ref_from_string_column(short column, T& result) const
+{
+    bound_column& col = bound_columns_[column];
+    const char* s = col.pdata_ + rowset_position_ * col.clen_;
+    switch (col.ctype_)
+    {
+    case SQL_C_CHAR:
+        result = static_cast<T>(*static_cast<const char*>(s));
+        return;
+    case SQL_C_WCHAR:
+        result = static_cast<T>(*reinterpret_cast<const SQLWCHAR*>(s));
+        return;
+    }
+    throw type_incompatible_error();
+}
+
+template <class T, typename std::enable_if<!is_character<T>::value, int>::type>
+void result::result_impl::get_ref_from_string_column(short column, T& result) const
+{
+    bound_column& col = bound_columns_[column];
+    if (col.ctype_ != SQL_C_CHAR && col.ctype_ != SQL_C_WCHAR)
+        throw type_incompatible_error();
+    std::string str;
+    get_ref_impl(col.column_, str);
+    result = from_string<T>(str);
+}
+
+template <class T, typename std::enable_if<!is_string<T>::value, int>::type>
 void result::result_impl::get_ref_impl(short column, T& result) const
 {
     bound_column& col = bound_columns_[column];
@@ -3204,7 +3276,8 @@ void result::result_impl::get_ref_impl(short column, T& result) const
     switch (col.ctype_)
     {
     case SQL_C_CHAR:
-        result = (T) * (char*)(s);
+    case SQL_C_WCHAR:
+        get_ref_from_string_column(column, result);
         return;
     case SQL_C_SSHORT:
         result = (T) * (short*)(s);
